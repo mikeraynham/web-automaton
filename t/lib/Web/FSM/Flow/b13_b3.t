@@ -47,13 +47,18 @@ use warnings FATAL => qw(all);
 }
 
 use Test::More;
-
+use Plack::Request;
 use Web::FSM::Flow;
 
-my $decider = Decider->new;
-my $flow    = Web::FSM::Flow->new(decider => $decider);
-my $code    = $flow->run;
+my $decider  = Decider->new;
+my $resource = {};
+my $request  = Plack::Request->new({});
+my $flow     = Web::FSM::Flow->new(
+    decider  => $decider,
+    resource => $resource,
+    request  => $request,
+);
 
-is($code,    300, 'path b13 to o18 returned code 300');
+is($flow->run, 300, 'path b13 to o18 returned code 300');
 
 1;

@@ -3,10 +3,14 @@ package Web::FSM::Flow;
 use strict;
 use warnings FATAL => qw(all);
 
+use Plack::Response;
 use Moo 2;
 use namespace::clean;
 
 has decider       => (is => 'ro', required => 1);
+has resource      => (is => 'ro', required => 1);
+has request       => (is => 'ro', required => 1);
+has response      => (is => 'lazy');
 has initial_state => (is => 'lazy');
 
 my %fsm = (
@@ -66,17 +70,19 @@ my %fsm = (
     p11 => [qw( 201 o20 )],
 );
 
-sub _build_initial_state {
-    'b13';
-}
+sub _build_initial_state { 'b13' }
+sub _build_response      { Plack::Response->new }
 
 sub run {
-    my $self    = shift;
-    my $state   = $self->initial_state;
-    my $decider = $self->decider;
+    my $self     = shift;
+    my $state    = $self->initial_state;
+    my $decider  = $self->decider;
+    my $resource = $self->resource;
+    my $request  = $self->request;
+    my $response = $self->response;
     
     while ($state =~ /^[a-p]/) {
-        $state = $decider->$state($state)
+        $state = $decider->$state($resource, $request, $response)
             ? $fsm{$state}[0]
             : $fsm{$state}[1];
     }

@@ -49,14 +49,17 @@ use warnings FATAL => qw(all);
 use Test::More;
 use Plack::Request;
 use Web::FSM::Flow;
+use Web::FSM::V3::StateChart;
 
-my $decider  = Decider->new;
-my $resource = {};
-my $request  = Plack::Request->new({});
-my $flow     = Web::FSM::Flow->new(
-    decider  => $decider,
-    resource => $resource,
-    request  => $request,
+my $decider     = Decider->new;
+my $state_chart = Web::FSM::V3::StateChart->new;
+my $resource    = {};
+my $request     = Plack::Request->new({});
+my $flow        = Web::FSM::Flow->new(
+    decider     => $decider,
+    state_chart => $state_chart,
+    resource    => $resource,
+    request     => $request,
 );
 
 is($flow->run, 300, 'path b13 to o18 returned code 300');

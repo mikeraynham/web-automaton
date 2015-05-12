@@ -12,6 +12,7 @@ sub is_authorized             { 1 }
 sub forbidden                 { 0 }
 sub allow_missing_post        { 0 }
 sub malformed_request         { 0 }
+sub validate_content_checksum { undef }
 sub uri_too_long              { 0 }
 sub known_content_type        { 1 }
 sub valid_content_headers     { 1 }

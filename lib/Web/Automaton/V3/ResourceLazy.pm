@@ -15,6 +15,7 @@ my @functions = qw(
     forbidden
     allow_missing_post
     malformed_request
+    validate_content_checksum
     uri_too_long
     known_content_type
     valid_content_headers
@@ -46,7 +47,7 @@ use Data::Dumper;
 
 for my $function (@functions) {
     has $function => (is => 'lazy');
-    eval qq|sub _build_$function { print "$function: "; my \$result = \$_[0]->resource->$function; print Dumper(\$result); return \$result; }|;
+    eval qq|sub _build_$function { \$_[0]->resource->$function }|;
 }
 
 1;

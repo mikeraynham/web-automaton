@@ -3,8 +3,8 @@
 use strict;
 use warnings FATAL => qw(all);
 
-use Data::Dumper;
 use Test::More;
+use Digest::MD5 qw(md5_hex);
 use List::Util 1.33 qw(pairs);
 
 use Web::Automaton::V3::Decider;
@@ -14,21 +14,25 @@ use Web::Automaton::V3::Resource;
 use Web::Automaton::Flow;
 use HTTP::Request;
 
-my @tests            = tests();
-my $paths            = create_paths();
-my $http_1_0_methods = [qw(GET HEAD POST)];
-my $http_1_1_methods = [qw(GET HEAD POST PUT DELETE TRACE CONNECT OPTIONS)];
-my $decider          = Web::Automaton::V3::Decider->new;
-my $state_chart      = Web::Automaton::V3::StateChart->new;
+my @tests       = tests();
+my $paths       = create_paths();
+my $decider     = Web::Automaton::V3::Decider->new;
+my $state_chart = Web::Automaton::V3::StateChart->new;
 
 for my $test (pairs @tests) {
     my ($desc, $init) = @$test;
 
-    my $request  = HTTP::Request->new(@{$init->{request_args}});
+    my @request_args = exists $init->{request_args}
+        ? @{$init->{request_args}} : ();
+
+    my %resource_args = exists $init->{resource_args}
+        ? %{$init->{resource_args}} : ();
+
+    my $request = HTTP::Request->new(@request_args);
 
     my $resource = Web::Automaton::V3::ResourceLazy->new(
         resource => Web::Automaton::V3::Resource->new,
-        %{$init->{resource_args}},
+        %resource_args
     );
 
     my $flow = Web::Automaton::Flow->new(
@@ -37,6 +41,8 @@ for my $test (pairs @tests) {
         resource    => $resource,
         request     => $request,
     );
+
+    $init->{pre_run}->($request) if $init->{pre_run};
 
     my ($code, $trace) = $flow->run;
 
@@ -47,7 +53,10 @@ for my $test (pairs @tests) {
 }
 
 sub tests {
-    'service unavailable' => {
+    my $http_1_0_methods = [qw(GET HEAD POST)];
+    my $http_1_1_methods = [qw(GET HEAD POST PUT DELETE TRACE CONNECT OPTIONS)];
+
+    '503, service unavailable (b13)' => {
         code          => 503,
         trace         => 'path_to_b13',
         request_args  => [HEAD => '/foo'],
@@ -55,7 +64,7 @@ sub tests {
             service_available => 0,
         },
     },
-    'not implemented (b12)' => {
+    '501, DELETE not implemented (b12)' => {
         code          => 501,
         trace         => 'path_to_b12',
         request_args  => [DELETE => '/foo'],
@@ -64,6 +73,49 @@ sub tests {
             known_methods   => $http_1_0_methods,
         },
     },
+    '501, non-standard FOO not implemented (b12)' => {
+        code          => 501,
+        trace         => 'path_to_b12',
+        request_args  => [FOO => '/foo'],
+        resource_args => {
+            allowed_methods => $http_1_0_methods,
+            known_methods   => $http_1_0_methods,
+        },
+    },
+    '414, URI too long (b11)' => {
+        code          => 414,
+        trace         => 'path_to_b11',
+        request_args  => [GET => '/foo'],
+        resource_args => {
+            uri_too_long => 1,
+        },
+    },
+    '405, HEAD method not allowed (b10)' => {
+        code          => 405,
+        trace         => 'path_to_b10',
+        request_args  => [HEAD => '/foo'],
+        resource_args => {
+            allowed_methods => [qw(GET POST PUT)],
+        },
+    },
+    '400, malformed request (b9)' => {
+        code          => 400,
+        trace         => 'path_to_b9',
+        request_args  => [
+            GET => '/foo',
+            ['Content-Type' => 'text/plain'],
+        ],
+        resource_args => {
+            malformed_request => 1,
+        },
+        pre_run => sub {
+            my $request = shift;
+            my $content = 'foo';
+            $request->content($content);
+            $request->header('Content-MD5' => md5_hex($content));
+        },
+    },
+
 }
 
 sub merge {
@@ -544,6 +596,5 @@ sub create_paths {
 
     return $paths;
 }
-
 
 done_testing;

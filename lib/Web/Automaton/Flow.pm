@@ -1,4 +1,4 @@
-package Web::FSM::Flow;
+package Web::Automaton::Flow;
 
 use strict;
 use warnings FATAL => qw(all);

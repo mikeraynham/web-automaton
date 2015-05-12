@@ -1,4 +1,4 @@
-package Web::FSM::V3::StateChart;
+package Web::Automaton::V3::StateChart;
 
 use strict;
 use warnings FATAL => qw(all);

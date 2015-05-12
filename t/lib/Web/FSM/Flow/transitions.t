@@ -48,14 +48,14 @@ use warnings FATAL => qw(all);
 
 use Test::More;
 use Plack::Request;
-use Web::FSM::Flow;
-use Web::FSM::V3::StateChart;
+use Web::Automaton::Flow;
+use Web::Automaton::V3::StateChart;
 
 my $decider     = Decider->new;
-my $state_chart = Web::FSM::V3::StateChart->new;
+my $state_chart = Web::Automaton::V3::StateChart->new;
 my $resource    = {};
 my $request     = Plack::Request->new({});
-my $flow        = Web::FSM::Flow->new(
+my $flow        = Web::Automaton::Flow->new(
     decider     => $decider,
     state_chart => $state_chart,
     resource    => $resource,

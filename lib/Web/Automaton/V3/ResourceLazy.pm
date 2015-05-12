@@ -3,7 +3,6 @@ package Web::Automaton::V3::ResourceLazy;
 use strict;
 use warnings FATAL => qw(all);
 
-use List::Util 1.33 qw(any);
 use Moo 2;
 use namespace::clean;
 
@@ -43,9 +42,11 @@ my @functions = qw(
     finish_request
 );
 
+use Data::Dumper;
+
 for my $function (@functions) {
-    has "_$function" => (is => 'lazy', init_arg => undef);
-    eval qq|sub _build__$function { \$_[0]->resource->$function }|;
+    has $function => (is => 'lazy');
+    eval qq|sub _build_$function { print "$function: "; my \$result = \$_[0]->resource->$function; print Dumper(\$result); return \$result; }|;
 }
 
 1;

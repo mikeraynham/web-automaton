@@ -3,7 +3,7 @@ package Web::Automaton::Flow;
 use strict;
 use warnings FATAL => qw(all);
 
-use Plack::Response;
+use HTTP::Response;
 use Moo 2;
 use namespace::clean;
 
@@ -13,7 +13,7 @@ has resource    => (is => 'ro', required => 1);
 has request     => (is => 'ro', required => 1);
 has response    => (is => 'lazy');
 
-sub _build_response { Plack::Response->new }
+sub _build_response { HTTP::Response->new }
 
 sub run {
     my $self        = shift;
@@ -24,14 +24,16 @@ sub run {
     my $response    = $self->response;
     my $state       = $state_chart->initial_state;
     my %transitions = $state_chart->transitions;
+    my @trace;
     
     while ($state =~ /^[a-p]/) {
+        push @trace, $state;
         $state = $decider->$state($resource, $request, $response)
             ? $transitions{$state}[0]
             : $transitions{$state}[1];
     }
 
-    return $state;
+    return $state, \@trace;
 }
 
 1;

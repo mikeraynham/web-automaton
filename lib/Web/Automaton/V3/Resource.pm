@@ -3,7 +3,6 @@ package Web::Automaton::V3::Resource;
 use strict;
 use warnings FATAL => qw(all);
 
-use List::Util 1.33 qw(any);
 use Moo 2;
 use namespace::clean;
 
@@ -19,7 +18,7 @@ sub valid_content_headers     { 1 }
 sub valid_entity_length       { 1 }
 sub options                   { +{} }
 sub allowed_methods           { [qw[ GET HEAD ]] }
-sub known_methods             { [qw[ GET HEAD POST PUT DELETE TRACE CONNECT OPTIONS ]]}
+sub known_methods             { [qw[ GET HEAD POST PUT DELETE TRACE CONNECT OPTIONS ]] }
 sub delete_resource           { 0 }
 sub delete_completed          { 1 }
 sub post_is_create            { 0 }

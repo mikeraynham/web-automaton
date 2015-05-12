@@ -9,7 +9,7 @@ use namespace::clean;
 
 sub b13 {
     my ($self, $resource, $request, $response) = @_;
-    $resource->resource_exists;
+    $resource->service_available;
 }
 
 sub b12 {

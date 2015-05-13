@@ -8,16 +8,14 @@ use Digest::MD5 qw(md5_hex);
 use List::Util 1.33 qw(pairs);
 
 use Web::Automaton::V3::Decider;
-use Web::Automaton::V3::StateChart;
 use Web::Automaton::V3::ResourceLazy;
 use Web::Automaton::V3::Resource;
 use Web::Automaton::Flow;
 use HTTP::Request;
 
-my @tests       = tests();
-my $paths       = create_paths();
-my $decider     = Web::Automaton::V3::Decider->new;
-my $state_chart = Web::Automaton::V3::StateChart->new;
+my @tests   = tests();
+my $paths   = create_paths();
+my $decider = Web::Automaton::V3::Decider->new;
 
 for my $test (pairs @tests) {
     my ($desc, $init) = @$test;
@@ -36,10 +34,9 @@ for my $test (pairs @tests) {
     );
 
     my $flow = Web::Automaton::Flow->new(
-        decider     => $decider,
-        state_chart => $state_chart,
-        resource    => $resource,
-        request     => $request,
+        decider  => $decider,
+        resource => $resource,
+        request  => $request,
     );
 
     $init->{pre_run}->($request) if $init->{pre_run};
@@ -98,15 +95,52 @@ sub tests {
             allowed_methods => [qw(GET POST PUT)],
         },
     },
-    '400, malformed request (b9)' => {
+    '400, invalid content checksum (b9c)' => {
         code          => 400,
-        trace         => 'path_to_b9',
+        trace         => 'path_to_b9c',
         request_args  => [
             GET => '/foo',
             ['Content-Type' => 'text/plain'],
         ],
         resource_args => {
+            validate_content_checksum => 0,
+        },
+        pre_run => sub {
+            my $request = shift;
+            $request->header('Content-MD5' => 'foo');
+        },
+    },
+    '400, Content-MD5 checksum invalid (b9d)' => {
+        code          => 400,
+        trace         => 'path_to_b9d',
+        request_args  => [
+            GET => '/foo',
+            ['Content-Type' => 'text/plain'],
+        ],
+        pre_run => sub {
+            my $request = shift;
+            my $content = 'foo';
+            $request->content($content);
+            $request->header('Content-MD5' => 'foo');
+        },
+    },
+    '400, malformed request (b9e)' => {
+        code          => 400,
+        trace         => 'path_to_b9e',
+        request_args  => [GET => '/foo'],
+        resource_args => {
             malformed_request => 1,
+        },
+    },
+    '401, unauthorized with Content-MD5 check (b8)' => {
+        code          => 401,
+        trace         => 'path_to_b8_via_b9a_b9b_b9d',
+        request_args  => [
+            GET => '/foo',
+            ['Content-Type' => 'text/plain'],
+        ],
+        resource_args => {
+            is_authorized => 0,
         },
         pre_run => sub {
             my $request = shift;
@@ -115,7 +149,6 @@ sub tests {
             $request->header('Content-MD5' => md5_hex($content));
         },
     },
-
 }
 
 sub merge {
@@ -154,20 +187,51 @@ sub create_paths {
     ));
 
     merge($paths, qw(
-        path_to_b9
+        path_to_b9a
         path_to_b10
-        b9
+        b9a
     ));
 
     merge($paths, qw(
-        path_to_b8
-        path_to_b9
+        path_to_b9b
+        path_to_b9a
+        b9b
+    ));
+
+    merge($paths, qw(
+        path_to_b9c
+        path_to_b9b
+        b9c
+    ));
+
+    merge($paths, qw(
+        path_to_b9d
+        path_to_b9b
+        b9d
+    ));
+
+    merge($paths, qw(
+        path_to_b9e
+        path_to_b9a
+        b9e
+    ));
+
+    merge($paths, qw(
+        path_to_b8_via_b9a_b9e
+        path_to_b9e
+        b8
+    ));
+
+    merge($paths, qw(
+        path_to_b8_via_b9a_b9b_b9d
+        path_to_b9b
+        b9d
         b8
     ));
 
     merge($paths, qw(
         path_to_b7
-        path_to_b8
+        path_to_b8_via_b9a_b9e
         b7
     ));
 

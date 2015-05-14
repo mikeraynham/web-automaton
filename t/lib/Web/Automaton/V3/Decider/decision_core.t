@@ -12,6 +12,7 @@ use Web::Automaton::V3::ResourceLazy;
 use Web::Automaton::V3::Resource;
 use Web::Automaton::Flow;
 use HTTP::Request;
+use HTTP::Response;
 
 my @tests   = tests();
 my $paths   = create_paths();
@@ -26,7 +27,8 @@ for my $test (pairs @tests) {
     my %resource_args = exists $init->{resource_args}
         ? %{$init->{resource_args}} : ();
 
-    my $request = HTTP::Request->new(@request_args);
+    my $request  = HTTP::Request->new(@request_args);
+    my $response = HTTP::Response->new;
 
     my $resource = Web::Automaton::V3::ResourceLazy->new(
         resource => Web::Automaton::V3::Resource->new,
@@ -37,6 +39,7 @@ for my $test (pairs @tests) {
         decider  => $decider,
         resource => $resource,
         request  => $request,
+        response => $response,
     );
 
     $init->{pre_run}->($request) if $init->{pre_run};
@@ -44,8 +47,32 @@ for my $test (pairs @tests) {
     my ($code, $trace) = $flow->run;
 
     subtest $desc => sub {
-        is($code, $init->{code}, 'HTTP code is ' . $init->{code});
-        is_deeply($trace, $paths->{$init->{trace}}, 'state trace is correct');
+        is( $code,
+            $init->{code},
+            'HTTP code is ' . $init->{code}
+        );
+        
+        is_deeply(
+            $trace,
+            $paths->{$init->{trace}},
+            'state trace is correct'
+        );
+
+        if (exists $init->{headers}) {
+
+            my @keys = sort keys %{$init->{headers}};
+            for my $key (@keys) {
+                is( $response->header($key),
+                    $init->{headers}->{$key},
+                    "header $key = " . $init->{headers}->{$key}
+                );
+            }
+        }
+        else {
+            ok( !$response->header_field_names,
+                'no headers have been added'
+            );
+        }
     };
 }
 
@@ -147,6 +174,20 @@ sub tests {
             my $content = 'foo';
             $request->content($content);
             $request->header('Content-MD5' => md5_hex($content));
+        },
+    },
+    '401, unauthorized with WWW-Authenticate header (b8)' => {
+        code          => 401,
+        trace         => 'path_to_b8_via_b9a_b9e',
+        headers       => {
+            'WWW-Authenticate' => 'Test Realm',
+        },
+        request_args  => [
+            GET => '/foo',
+            ['Content-Type' => 'text/plain'],
+        ],
+        resource_args => {
+            is_authorized => 'Test Realm',
         },
     },
 }

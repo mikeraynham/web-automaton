@@ -6,6 +6,19 @@ use warnings FATAL => qw(all);
 use Moo 2;
 use namespace::clean;
 
+=head1 METHODS
+
+=head2 is_authorized
+
+Default: C<1>
+
+A return value I<other than a true value that looks like a number> will
+result in a B<401 Unauthorized> response.  If the return value is true
+and does not look like a number, a C<WWW-Authenticate> header will be
+created with the returned value.
+
+=cut
+
 sub resource_exists           { 1 }
 sub service_available         { 1 }
 sub is_authorized             { 1 }

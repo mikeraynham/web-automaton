@@ -3,8 +3,11 @@ package Web::Automaton::V3::Decider;
 use strict;
 use warnings FATAL => qw(all);
 
+use Data::Dumper;
+
 use Digest::MD5 qw(md5_hex);
 use List::Util 1.33 qw(any);
+use Scalar::Util qw(looks_like_number);
 use Web::Automaton::StatusCode qw(:mnemonics);
 
 use Moo 2;
@@ -95,10 +98,14 @@ sub b9e {
 
 sub b8 {
     my ($resource, $request, $response) = @_;
+    my $authenticated = $resource->is_authorized;
 
-    $resource->is_authorized
-        ? \&b7
-        : HTTP_UNAUTHORIZED;
+    return \&b7 if $authenticated && looks_like_number($authenticated);
+
+    $authenticated
+        && $response->header('WWW-Authenticate' => $authenticated);
+
+    HTTP_UNAUTHORIZED;
 }
 
 sub b7 {

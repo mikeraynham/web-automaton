@@ -98,7 +98,9 @@ sub b9e {
 
 sub b8 {
     my ($resource, $request, $response) = @_;
-    my $authenticated = $resource->is_authorized;
+    my $authenticated = $resource->is_authorized(
+        $request->header('Authorization')
+    );
 
     return \&b7 if $authenticated && looks_like_number($authenticated);
 
@@ -111,7 +113,25 @@ sub b8 {
 sub b7 {
     my ($resource, $request, $response) = @_;
 
-    die 'not implemented';
+    $resource->forbidden
+        ? HTTP_FORBIDDEN
+        : \&b6;
 }
+
+sub b6 {
+    my ($resource, $request, $response) = @_;
+
+    my $headers = $request->headers->clone;
+    my @remove  = grep { !/^content-/ } $headers->header_field_names;
+
+    $headers->remove_content_headers(@remove);
+
+    $resource->valid_content_headers($headers)
+        ? HTTP_NOT_IMPLEMENTED
+        : \&b5;
+}
+
+
+
 
 1;

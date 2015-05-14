@@ -8,9 +8,12 @@ use namespace::clean;
 
 =head1 METHODS
 
-=head2 is_authorized
+=head2 is_authorized( $authorization_header )
 
 Default: C<1>
+
+C<$authorization_header> will be the value of the authorization header
+sent by the client, if any.
 
 A return value I<other than a true value that looks like a number> will
 result in a B<401 Unauthorized> response.  If the return value is true

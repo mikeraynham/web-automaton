@@ -3,6 +3,7 @@
 use strict;
 use warnings FATAL => qw(all);
 
+use Data::Dumper;
 use Test::More;
 use Digest::MD5 qw(md5_hex);
 use List::Util 1.33 qw(pairs);
@@ -18,8 +19,30 @@ my @tests   = tests();
 my $paths   = create_paths();
 my $decider = Web::Automaton::V3::Decider->new;
 
+{
+    my $count = 0;
+    sub make_resource {
+        my %resource_args = @_;
+        my $package = "TestResource$count";
+
+        $count++;
+        eval join "\n",
+            qq|package $package;|,
+             q|use parent 'Web::Automaton::V3::Resource';|,
+             q|1;|;
+
+        while (my ($method, $value) = each %resource_args) {
+            no strict 'refs';
+            *{"$package::$method"} = sub { $value };
+        }
+
+        $package->new;
+    }
+}
+
 for my $test (pairs @tests) {
     my ($desc, $init) = @$test;
+
 
     my @request_args = exists $init->{request_args}
         ? @{$init->{request_args}} : ();
@@ -29,11 +52,7 @@ for my $test (pairs @tests) {
 
     my $request  = HTTP::Request->new(@request_args);
     my $response = HTTP::Response->new;
-
-    my $resource = Web::Automaton::V3::ResourceLazy->new(
-        resource => Web::Automaton::V3::Resource->new,
-        %resource_args
-    );
+    my $resource = make_resource(%resource_args);
 
     my $flow = Web::Automaton::Flow->new(
         decider  => $decider,
@@ -46,7 +65,15 @@ for my $test (pairs @tests) {
 
     my ($code, $trace) = $flow->run;
 
-    subtest $desc => sub {
+    my $path = $init->{trace};
+    for ($path) {
+        s/^path_to_//;
+        s/_via_/ via /;
+        s/_/,/g;
+    }
+
+    subtest "$code, $desc ($path)" => sub {
+
         is( $code,
             $init->{code},
             'HTTP code is ' . $init->{code}
@@ -80,7 +107,7 @@ sub tests {
     my $http_1_0_methods = [qw(GET HEAD POST)];
     my $http_1_1_methods = [qw(GET HEAD POST PUT DELETE TRACE CONNECT OPTIONS)];
 
-    '503, service unavailable (b13)' => {
+    'service unavailable' => {
         code          => 503,
         trace         => 'path_to_b13',
         request_args  => [HEAD => '/foo'],
@@ -88,7 +115,7 @@ sub tests {
             service_available => 0,
         },
     },
-    '501, DELETE not implemented (b12)' => {
+    'DELETE not implemented' => {
         code          => 501,
         trace         => 'path_to_b12',
         request_args  => [DELETE => '/foo'],
@@ -97,7 +124,7 @@ sub tests {
             known_methods   => $http_1_0_methods,
         },
     },
-    '501, non-standard FOO not implemented (b12)' => {
+    'non-standard FOO not implemented' => {
         code          => 501,
         trace         => 'path_to_b12',
         request_args  => [FOO => '/foo'],
@@ -106,7 +133,7 @@ sub tests {
             known_methods   => $http_1_0_methods,
         },
     },
-    '414, URI too long (b11)' => {
+    'URI too long' => {
         code          => 414,
         trace         => 'path_to_b11',
         request_args  => [GET => '/foo'],
@@ -114,7 +141,7 @@ sub tests {
             uri_too_long => 1,
         },
     },
-    '405, HEAD method not allowed (b10)' => {
+    'HEAD method not allowed' => {
         code          => 405,
         trace         => 'path_to_b10',
         request_args  => [HEAD => '/foo'],
@@ -122,7 +149,7 @@ sub tests {
             allowed_methods => [qw(GET POST PUT)],
         },
     },
-    '400, invalid content checksum (b9c)' => {
+    'invalid content checksum' => {
         code          => 400,
         trace         => 'path_to_b9c',
         request_args  => [
@@ -137,7 +164,7 @@ sub tests {
             $request->header('Content-MD5' => 'foo');
         },
     },
-    '400, Content-MD5 checksum invalid (b9d)' => {
+    'Content-MD5 checksum invalid' => {
         code          => 400,
         trace         => 'path_to_b9d',
         request_args  => [
@@ -151,7 +178,7 @@ sub tests {
             $request->header('Content-MD5' => 'foo');
         },
     },
-    '400, malformed request (b9e)' => {
+    'malformed request' => {
         code          => 400,
         trace         => 'path_to_b9e',
         request_args  => [GET => '/foo'],
@@ -159,12 +186,15 @@ sub tests {
             malformed_request => 1,
         },
     },
-    '401, unauthorized with Content-MD5 check (b8)' => {
+    'unauthorized with Content-MD5 check' => {
         code          => 401,
         trace         => 'path_to_b8_via_b9a_b9b_b9d',
         request_args  => [
             GET => '/foo',
-            ['Content-Type' => 'text/plain'],
+            [
+                'Content-Type' => 'text/plain',
+                'Accept' => 'text/plain',
+            ],
         ],
         resource_args => {
             is_authorized => 0,
@@ -176,7 +206,7 @@ sub tests {
             $request->header('Content-MD5' => md5_hex($content));
         },
     },
-    '401, unauthorized with WWW-Authenticate header (b8)' => {
+    'unauthorized with WWW-Authenticate header' => {
         code          => 401,
         trace         => 'path_to_b8_via_b9a_b9e',
         headers       => {
@@ -190,6 +220,24 @@ sub tests {
             is_authorized => 'Test Realm',
         },
     },
+    'forbidden' => {
+        code          => 403,
+        trace         => 'path_to_b7',
+        request_args  => [GET => '/foo'],
+        resource_args => {
+            forbidden => 1,
+        },
+    },
+    'invalid content headers' => {
+        code          => 501,
+        trace         => 'path_to_b6',
+        request_args  => [GET => '/foo'],
+        resource_args => {
+            valid_content_headers => 0,
+        },
+    },
+
+
 }
 
 sub merge {
@@ -701,5 +749,6 @@ sub create_paths {
 
     return $paths;
 }
+
 
 done_testing;

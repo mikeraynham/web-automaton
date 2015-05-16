@@ -4,24 +4,23 @@ use strict;
 use warnings FATAL => qw(all);
 
 use Data::Dumper;
-use Test::More;
-use Digest::MD5 qw(md5_hex);
-use List::Util 1.33 qw(pairs);
 
-use Web::Automaton::V3::Decider;
-use Web::Automaton::V3::ResourceLazy;
-use Web::Automaton::V3::Resource;
-use Web::Automaton::Flow;
+use Digest::MD5 qw(md5_hex);
 use HTTP::Request;
 use HTTP::Response;
+use List::Util 1.33 qw(pairs);
+use Test::More;
 
-my @tests   = tests();
-my $paths   = create_paths();
-my $decider = Web::Automaton::V3::Decider->new;
+use Web::Automaton::V3::States;
+use Web::Automaton::V3::Resource;
+
+my @tests = tests();
+my $paths = create_paths();
 
 {
     my $count = 0;
     sub make_resource {
+        print Dumper(\@INC);
         my %resource_args = @_;
         my $package = "TestResource$count";
 
@@ -43,7 +42,6 @@ my $decider = Web::Automaton::V3::Decider->new;
 for my $test (pairs @tests) {
     my ($desc, $init) = @$test;
 
-
     my @request_args = exists $init->{request_args}
         ? @{$init->{request_args}} : ();
 
@@ -54,16 +52,15 @@ for my $test (pairs @tests) {
     my $response = HTTP::Response->new;
     my $resource = make_resource(%resource_args);
 
-    my $flow = Web::Automaton::Flow->new(
-        decider  => $decider,
-        resource => $resource,
+    my $states = Web::Automaton::V3::States->new(
         request  => $request,
         response => $response,
+        resource => $resource,
     );
 
     $init->{pre_run}->($request) if $init->{pre_run};
 
-    my ($code, $trace) = $flow->run;
+    my ($code, $trace) = $states->run;
 
     my $path = $init->{trace};
     for ($path) {
@@ -749,6 +746,5 @@ sub create_paths {
 
     return $paths;
 }
-
 
 done_testing;

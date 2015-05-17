@@ -26,10 +26,11 @@ sub run {
         $prev_state && $state eq $prev_state
             && die "$state is calling itself";
         push @trace, $state;
-        print "Transitioning to $state\n";
         
         $prev_state = $state;
         $state = $self->$state($resource, $request, $response);
+
+        print "STATE: $state\n";
 
         last if is_status_code($state);
     }

@@ -3,13 +3,16 @@
 use strict;
 use warnings FATAL => qw(all);
 
-use Data::Dumper;
+use FindBin;
+use lib "$FindBin::Bin";
+use TestResource;
 
 use Digest::MD5 qw(md5_hex);
 use HTTP::Request;
 use HTTP::Response;
 use List::Util 1.33 qw(pairs);
 use Test::More;
+use Test::Deep;
 
 use Web::Automaton::V3::States;
 use Web::Automaton::V3::Resource;
@@ -17,40 +20,20 @@ use Web::Automaton::V3::Resource;
 my @tests = tests();
 my $paths = create_paths();
 
-{
-    my $count = 0;
-    sub make_resource {
-        print Dumper(\@INC);
-        my %resource_args = @_;
-        my $package = "TestResource$count";
-
-        $count++;
-        eval join "\n",
-            qq|package $package;|,
-             q|use parent 'Web::Automaton::V3::Resource';|,
-             q|1;|;
-
-        while (my ($method, $value) = each %resource_args) {
-            no strict 'refs';
-            *{"$package::$method"} = sub { $value };
-        }
-
-        $package->new;
-    }
-}
-
 for my $test (pairs @tests) {
     my ($desc, $init) = @$test;
 
     my @request_args = exists $init->{request_args}
         ? @{$init->{request_args}} : ();
 
-    my %resource_args = exists $init->{resource_args}
-        ? %{$init->{resource_args}} : ();
+    my $override_callback = exists $init->{override_callback}
+        ? $init->{override_callback} : {};
 
     my $request  = HTTP::Request->new(@request_args);
     my $response = HTTP::Response->new;
-    my $resource = make_resource(%resource_args);
+    my $resource = TestResource->new(
+        override_callback => $override_callback,
+    );
 
     my $states = Web::Automaton::V3::States->new(
         request  => $request,
@@ -62,7 +45,7 @@ for my $test (pairs @tests) {
 
     my ($code, $trace) = $states->run;
 
-    my $path = $init->{trace};
+    my $path = $init->{expected_trace};
     for ($path) {
         s/^path_to_//;
         s/_via_/ via /;
@@ -72,29 +55,39 @@ for my $test (pairs @tests) {
     subtest "$code, $desc ($path)" => sub {
 
         is( $code,
-            $init->{code},
-            'HTTP code is ' . $init->{code}
+            $init->{expected_code},
+            'HTTP code is ' . $init->{expected_code}
         );
         
         is_deeply(
             $trace,
-            $paths->{$init->{trace}},
+            $paths->{$init->{expected_trace}},
             'state trace is correct'
         );
 
-        if (exists $init->{headers}) {
+        if (exists $init->{expected_response_headers}) {
 
-            my @keys = sort keys %{$init->{headers}};
+            my %headers = %{$init->{expected_response_headers}};
+
+            my @keys = sort keys %headers;
             for my $key (@keys) {
                 is( $response->header($key),
-                    $init->{headers}->{$key},
-                    "header $key = " . $init->{headers}->{$key}
+                    $headers{$key},
+                    "header $key = $headers{$key}"
                 );
             }
         }
         else {
             ok( !$response->header_field_names,
                 'no headers have been added'
+            );
+        }
+
+        if (exists $init->{excpected_callback_args}) {
+            cmp_deeply(
+                $resource->callback_args,
+                superhashof($init->{excpected_callback_args}),
+                'the resource callback(s) received the expected arguments'
             );
         }
     };
@@ -105,55 +98,55 @@ sub tests {
     my $http_1_1_methods = [qw(GET HEAD POST PUT DELETE TRACE CONNECT OPTIONS)];
 
     'service unavailable' => {
-        code          => 503,
-        trace         => 'path_to_b13',
-        request_args  => [HEAD => '/foo'],
-        resource_args => {
+        expected_code     => 503,
+        expected_trace    => 'path_to_b13',
+        request_args      => [HEAD => '/foo'],
+        override_callback => {
             service_available => 0,
         },
     },
     'DELETE not implemented' => {
-        code          => 501,
-        trace         => 'path_to_b12',
-        request_args  => [DELETE => '/foo'],
-        resource_args => {
+        expected_code     => 501,
+        expected_trace    => 'path_to_b12',
+        request_args      => [DELETE => '/foo'],
+        override_callback => {
             allowed_methods => $http_1_0_methods,
             known_methods   => $http_1_0_methods,
         },
     },
     'non-standard FOO not implemented' => {
-        code          => 501,
-        trace         => 'path_to_b12',
-        request_args  => [FOO => '/foo'],
-        resource_args => {
+        expected_code     => 501,
+        expected_trace    => 'path_to_b12',
+        request_args      => [FOO => '/foo'],
+        override_callback => {
             allowed_methods => $http_1_0_methods,
             known_methods   => $http_1_0_methods,
         },
     },
     'URI too long' => {
-        code          => 414,
-        trace         => 'path_to_b11',
-        request_args  => [GET => '/foo'],
-        resource_args => {
+        expected_code     => 414,
+        expected_trace    => 'path_to_b11',
+        request_args      => [GET => '/foo'],
+        override_callback => {
             uri_too_long => 1,
         },
     },
     'HEAD method not allowed' => {
-        code          => 405,
-        trace         => 'path_to_b10',
-        request_args  => [HEAD => '/foo'],
-        resource_args => {
+        expected_code     => 405,
+        expected_trace    => 'path_to_b10',
+        request_args      => [HEAD => '/foo'],
+        override_callback => {
             allowed_methods => [qw(GET POST PUT)],
         },
     },
     'invalid content checksum' => {
-        code          => 400,
-        trace         => 'path_to_b9c',
-        request_args  => [
+        expected_code  => 400,
+        expected_trace => 'path_to_b9c',
+        request_args   => [
             GET => '/foo',
             ['Content-Type' => 'text/plain'],
         ],
-        resource_args => {
+        override_callback => {
             validate_content_checksum => 0,
         },
         pre_run => sub {
@@ -162,9 +155,9 @@ sub tests {
         },
     },
     'Content-MD5 checksum invalid' => {
-        code          => 400,
-        trace         => 'path_to_b9d',
-        request_args  => [
+        expected_code  => 400,
+        expected_trace => 'path_to_b9d',
+        request_args   => [
             GET => '/foo',
             ['Content-Type' => 'text/plain'],
         ],
@@ -176,24 +169,24 @@ sub tests {
         },
     },
     'malformed request' => {
-        code          => 400,
-        trace         => 'path_to_b9e',
-        request_args  => [GET => '/foo'],
-        resource_args => {
+        expected_code     => 400,
+        expected_trace    => 'path_to_b9e',
+        request_args      => [GET           => '/foo'],
+        override_callback => {
             malformed_request => 1,
         },
     },
     'unauthorized with Content-MD5 check' => {
-        code          => 401,
-        trace         => 'path_to_b8_via_b9a_b9b_b9d',
-        request_args  => [
+        expected_code  => 401,
+        expected_trace => 'path_to_b8_via_b9a_b9b_b9d',
+        request_args   => [
             GET => '/foo',
             [
                 'Content-Type' => 'text/plain',
                 'Accept' => 'text/plain',
             ],
         ],
-        resource_args => {
+        override_callback => {
             is_authorized => 0,
         },
         pre_run => sub {
@@ -204,37 +197,60 @@ sub tests {
         },
     },
     'unauthorized with WWW-Authenticate header' => {
-        code          => 401,
-        trace         => 'path_to_b8_via_b9a_b9e',
-        headers       => {
+        expected_code           => 401,
+        expected_trace          => 'path_to_b8_via_b9a_b9e',
+        excpected_callback_args => {
+            is_authorized => ['foo'],
+        },
+        expected_response_headers => {
             'WWW-Authenticate' => 'Test Realm',
         },
         request_args  => [
             GET => '/foo',
             ['Content-Type' => 'text/plain'],
         ],
-        resource_args => {
+        override_callback => {
             is_authorized => 'Test Realm',
+        },
+        pre_run => sub {
+            shift->header('Authorization' => 'foo');
         },
     },
     'forbidden' => {
-        code          => 403,
-        trace         => 'path_to_b7',
-        request_args  => [GET => '/foo'],
-        resource_args => {
+        expected_code  => 403,
+        expected_trace => 'path_to_b7',
+        request_args   => [GET => '/foo'],
+        override_callback => {
             forbidden => 1,
         },
     },
     'invalid content headers' => {
-        code          => 501,
-        trace         => 'path_to_b6',
-        request_args  => [GET => '/foo'],
-        resource_args => {
+        expected_code           => 501,
+        expected_trace          => 'path_to_b6',
+        excpected_callback_args => {
+            valid_content_headers => [
+                HTTP::Headers->new('Content-Type' => 'text/plain'),
+            ],
+        },
+        request_args   => [
+            GET => '/foo',
+            [
+                'Content-Type' => 'text/plain',
+                'Accept' => 'text/plain',
+            ],
+        ],
+        override_callback => {
             valid_content_headers => 0,
         },
     },
-
-
+    'unknown content type' => {
+        expected_code     => 415,
+        expected_trace    => 'path_to_b5',
+        request_args      => [GET => '/foo'],
+        override_callback => {
+            known_content_type => 0,
+        },
+    },
 }
 
 sub merge {

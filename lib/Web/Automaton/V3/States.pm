@@ -3,8 +3,6 @@ package Web::Automaton::V3::States;
 use strict;
 use warnings FATAL => qw(all);
 
-use Data::Dumper;
-
 use Digest::MD5 qw(md5_hex);
 use List::Util 1.33 qw(any);
 use Scalar::Util qw(looks_like_number);
@@ -20,18 +18,18 @@ sub initial_state {
     'b13';
 }
 
-# B13 : Available?
+# B13 : service_available?
 # B13 --> B12 : true
 # B13 --> 503_Service_Unavailable : false
 sub b13 {
     my ($self, $resource, $request, $response) = @_;
 
-    $resource->service_available
+    $resource->service_available(foo => 'bar')
         ? 'b12'
         : HTTP_SERVICE_UNAVAILABLE;
 }
 
-# B12 : Known method?
+# B12 : known_methods?
 # B12 --> B11 : true
 # B12 --> 501_Not_Implemented : false
 sub b12 {
@@ -43,7 +41,7 @@ sub b12 {
         : HTTP_NOT_IMPLEMENTED;
 }
 
-# B11 : URI too long?
+# B11 : uri_too_long?
 # B11 --> 424_Request_URI_Too_Long : true
 # B11 --> B10 : false
 sub b11 {
@@ -54,7 +52,7 @@ sub b11 {
         : 'b10';
 }
 
-# B10 : Is method allowed?
+# B10 : allowed_methods?
 # B10 --> 405_Method_Not_Allowed : true
 # B10 --> B9 : false
 sub b10 {
@@ -68,7 +66,7 @@ sub b10 {
     return HTTP_METHOD_NOT_ALLOWED;
 }
 
-# B9 : Malformed?
+# B9 : malformed_request?
 # B9 --> 400_Bad_Request : true
 # B9 --> B8 : false
 sub b9a {
@@ -114,7 +112,7 @@ sub b9e {
         : 'b8';
 }
 
-# B8 : Authorized?
+# B8 : is_authorized?
 # B8 --> 401_Unauthorized
 # B8 --> B7
 sub b8 {
@@ -131,7 +129,7 @@ sub b8 {
     HTTP_UNAUTHORIZED;
 }
 
-# B7 : Forbidden?
+# B7 : forbidden?
 # B7 --> 403_Forbidden : true
 # B7 --> B6 : false
 sub b7 {
@@ -142,35 +140,36 @@ sub b7 {
         : 'b6';
 }
 
-# B6 : Unknown or unsupported Content-* header?
+# B6 : valid_content_headers?
 # B6 --> 501_Not_Implemented : true
 # B6 --> B5 : false
 sub b6 {
     my ($self, $resource, $request, $response) = @_;
 
     my $headers = $request->headers->clone;
-    my @remove  = grep { !/^content-/ } $headers->header_field_names;
-
-    $headers->remove_content_headers(@remove);
+    
+    $headers->remove_header($_)
+        for grep { !/^content-/i } $request->headers->header_field_names;
 
     $resource->valid_content_headers($headers)
-        ? HTTP_NOT_IMPLEMENTED
-        : 'b5';
+        ? 'b5'
+        : HTTP_NOT_IMPLEMENTED;
 }
 
-# B5 : Unknown Content-Type?
-# B5 --> 415_Unsupported_Method : true
-# B5 --> B4 : false
-
+# B5 : known_content_type?
+# B5 --> B4 : true
+# B5 --> 415_Unsupported_Media_Type : false
 sub b5 {
     my ($self, $resource, $request, $response) = @_;
 
+    $resource->known_content_type
+        ? 'b4'
+        : HTTP_UNSUPPORTED_MEDIA_TYPE;
 }
 
 # B4 : Request entity too large?
 # B4 --> 413_Request_Entity_Too_Large : true
 # B4 --> B3 : false
-
 sub b4 {
     my ($self, $resource, $request, $response) = @_;
 
@@ -179,7 +178,6 @@ sub b4 {
 # B3 : OPTIONS?
 # B3 --> 200_OK : true
 # B3 --> C3 : false
-
 sub b3 {
     my ($self, $resource, $request, $response) = @_;
 
@@ -188,8 +186,7 @@ sub b3 {
 # C3 : Accept exists?
 # C3 --> C4 : true
 # C3 --> D4 : false
-
-sub  {
+sub c3 {
     my ($self, $resource, $request, $response) = @_;
 
 }
@@ -197,8 +194,7 @@ sub  {
 # C4 : Acceptable media type available?
 # C4 --> D4 : true
 # C4 --> 406_Not_Acceptable : false
-
-sub  {
+sub c4 {
     my ($self, $resource, $request, $response) = @_;
 
 }
@@ -206,8 +202,7 @@ sub  {
 # D4 : Accept-Language exists?
 # D4 --> D5 : true
 # D4 --> 406_Not_Acceptable : false
-
-sub  {
+sub d4 {
     my ($self, $resource, $request, $response) = @_;
 
 }
@@ -215,8 +210,7 @@ sub  {
 # E5 : Accept-Charset exists?
 # E5 --> E6 : true
 # E5 --> F6 : false
-
-sub  {
+sub e5 {
     my ($self, $resource, $request, $response) = @_;
 
 }
@@ -224,8 +218,7 @@ sub  {
 # E6 : Acceptable charset available?
 # E6 --> F6 : true
 # E6 --> 406_Not_Acceptable : false
-
-sub  {
+sub e6 {
     my ($self, $resource, $request, $response) = @_;
 
 }

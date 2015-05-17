@@ -15,10 +15,14 @@ use namespace::clean;
 
 with 'Web::Automaton::Runner';
 
+# [*] --> B13
 sub initial_state {
     'b13';
 }
 
+# B13 : Available?
+# B13 --> B12 : true
+# B13 --> 503_Service_Unavailable : false
 sub b13 {
     my ($self, $resource, $request, $response) = @_;
 
@@ -27,6 +31,9 @@ sub b13 {
         : HTTP_SERVICE_UNAVAILABLE;
 }
 
+# B12 : Known method?
+# B12 --> B11 : true
+# B12 --> 501_Not_Implemented : false
 sub b12 {
     my ($self, $resource, $request, $response) = @_;
     my $method = $request->method;
@@ -36,6 +43,9 @@ sub b12 {
         : HTTP_NOT_IMPLEMENTED;
 }
 
+# B11 : URI too long?
+# B11 --> 424_Request_URI_Too_Long : true
+# B11 --> B10 : false
 sub b11 {
     my ($self, $resource, $request, $response) = @_;
 
@@ -44,6 +54,9 @@ sub b11 {
         : 'b10';
 }
 
+# B10 : Is method allowed?
+# B10 --> 405_Method_Not_Allowed : true
+# B10 --> B9 : false
 sub b10 {
     my ($self, $resource, $request, $response) = @_;
     my $method = $request->method;
@@ -55,6 +68,9 @@ sub b10 {
     return HTTP_METHOD_NOT_ALLOWED;
 }
 
+# B9 : Malformed?
+# B9 --> 400_Bad_Request : true
+# B9 --> B8 : false
 sub b9a {
     my ($self, $resource, $request, $response) = @_;
 
@@ -98,6 +114,9 @@ sub b9e {
         : 'b8';
 }
 
+# B8 : Authorized?
+# B8 --> 401_Unauthorized
+# B8 --> B7
 sub b8 {
     my ($self, $resource, $request, $response) = @_;
     my $authenticated = $resource->is_authorized(
@@ -112,6 +131,9 @@ sub b8 {
     HTTP_UNAUTHORIZED;
 }
 
+# B7 : Forbidden?
+# B7 --> 403_Forbidden : true
+# B7 --> B6 : false
 sub b7 {
     my ($self, $resource, $request, $response) = @_;
 
@@ -120,6 +142,9 @@ sub b7 {
         : 'b6';
 }
 
+# B6 : Unknown or unsupported Content-* header?
+# B6 --> 501_Not_Implemented : true
+# B6 --> B5 : false
 sub b6 {
     my ($self, $resource, $request, $response) = @_;
 
@@ -133,7 +158,82 @@ sub b6 {
         : 'b5';
 }
 
+# B5 : Unknown Content-Type?
+# B5 --> 415_Unsupported_Method : true
+# B5 --> B4 : false
 
+sub b5 {
+    my ($self, $resource, $request, $response) = @_;
 
+}
+
+# B4 : Request entity too large?
+# B4 --> 413_Request_Entity_Too_Large : true
+# B4 --> B3 : false
+
+sub b4 {
+    my ($self, $resource, $request, $response) = @_;
+
+}
+
+# B3 : OPTIONS?
+# B3 --> 200_OK : true
+# B3 --> C3 : false
+
+sub b3 {
+    my ($self, $resource, $request, $response) = @_;
+
+}
+
+# C3 : Accept exists?
+# C3 --> C4 : true
+# C3 --> D4 : false
+
+sub  {
+    my ($self, $resource, $request, $response) = @_;
+
+}
+
+# C4 : Acceptable media type available?
+# C4 --> D4 : true
+# C4 --> 406_Not_Acceptable : false
+
+sub  {
+    my ($self, $resource, $request, $response) = @_;
+
+}
+
+# D4 : Accept-Language exists?
+# D4 --> D5 : true
+# D4 --> 406_Not_Acceptable : false
+
+sub  {
+    my ($self, $resource, $request, $response) = @_;
+
+}
+
+# E5 : Accept-Charset exists?
+# E5 --> E6 : true
+# E5 --> F6 : false
+
+sub  {
+    my ($self, $resource, $request, $response) = @_;
+
+}
+
+# E6 : Acceptable charset available?
+# E6 --> F6 : true
+# E6 --> 406_Not_Acceptable : false
+
+sub  {
+    my ($self, $resource, $request, $response) = @_;
+
+}
 
 1;
+
+__END__
+
+perl -ne 'm/( : | --> )/ && s/^# // && print' lib/Web/Automaton/V3/States.pm \
+    | /usr/bin/java -jar /usr/local/bin/plantuml.jar -pipe \
+    > diagram/v3.png && open diagram/v3.png

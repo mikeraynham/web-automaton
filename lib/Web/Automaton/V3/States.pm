@@ -24,7 +24,7 @@ sub initial_state {
 sub b13 {
     my ($self, $resource, $request, $response) = @_;
 
-    $resource->service_available(foo => 'bar')
+    $resource->service_available
         ? 'b12'
         : HTTP_SERVICE_UNAVAILABLE;
 }
@@ -52,9 +52,9 @@ sub b11 {
         : 'b10';
 }
 
-# B10 : allowed_methods?
-# B10 --> 405_Method_Not_Allowed : true
-# B10 --> B9 : false
+# B10 : [request method in] allowed_methods?
+# B10 --> B9 : true
+# B10 --> 405_Method_Not_Allowed : false
 sub b10 {
     my ($self, $resource, $request, $response) = @_;
     my $method = $request->method;
@@ -66,9 +66,6 @@ sub b10 {
     return HTTP_METHOD_NOT_ALLOWED;
 }
 
-# B9 : malformed_request?
-# B9 --> 400_Bad_Request : true
-# B9 --> B8 : false
 sub b9a {
     my ($self, $resource, $request, $response) = @_;
 
@@ -104,6 +101,9 @@ sub b9d {
         : HTTP_BAD_REQUEST;
 }
 
+# B9 : malformed_request?
+# B9 --> 400_Bad_Request : true
+# B9 --> B8 : false
 sub b9e {
     my ($self, $resource, $request, $response) = @_;
 
@@ -113,8 +113,8 @@ sub b9e {
 }
 
 # B8 : is_authorized?
-# B8 --> 401_Unauthorized
-# B8 --> B7
+# B8 --> B7 : true
+# B8 --> 401_Unauthorized : false
 sub b8 {
     my ($self, $resource, $request, $response) = @_;
     my $authenticated = $resource->is_authorized(
@@ -141,8 +141,8 @@ sub b7 {
 }
 
 # B6 : valid_content_headers?
-# B6 --> 501_Not_Implemented : true
-# B6 --> B5 : false
+# B6 --> B5 : true
+# B6 --> 501_Not_Implemented : false
 sub b6 {
     my ($self, $resource, $request, $response) = @_;
 

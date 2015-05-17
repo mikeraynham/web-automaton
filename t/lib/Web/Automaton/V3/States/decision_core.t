@@ -79,7 +79,7 @@ for my $test (pairs @tests) {
         }
         else {
             ok( !$response->header_field_names,
-                'no headers have been added'
+                'no response headers have been added'
             );
         }
 

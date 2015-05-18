@@ -9,6 +9,7 @@ use TestResource;
 
 use Digest::MD5 qw(md5_hex);
 use HTTP::Request;
+use HTTP::Request::Common qw(GET HEAD PUT POST DELETE);
 use HTTP::Response;
 use List::Util 1.33 qw(pairs);
 use Test::More;
@@ -23,13 +24,13 @@ my $paths = create_paths();
 for my $test (pairs @tests) {
     my ($desc, $init) = @$test;
 
-    my @request_args = exists $init->{request_args}
-        ? @{$init->{request_args}} : ();
-
     my $override_callback = exists $init->{override_callback}
         ? $init->{override_callback} : {};
 
-    my $request  = HTTP::Request->new(@request_args);
+    my $request = ref($init->{request}) eq 'ARRAY'
+        ? HTTP::Request->new(@{$init->{request}})
+        : $init->{request};
+
     my $response = HTTP::Response->new;
     my $resource = TestResource->new(
         override_callback => $override_callback,
@@ -100,7 +101,7 @@ sub tests {
     'service unavailable' => {
         expected_code     => 503,
         expected_trace    => 'path_to_b13',
-        request_args      => [HEAD => '/foo'],
+        request           => HEAD('/foo'),
         override_callback => {
             service_available => 0,
         },
@@ -108,7 +109,7 @@ sub tests {
     'DELETE not implemented' => {
         expected_code     => 501,
         expected_trace    => 'path_to_b12',
-        request_args      => [DELETE => '/foo'],
+        request           => DELETE('/foo'),
         override_callback => {
             allowed_methods => $http_1_0_methods,
             known_methods   => $http_1_0_methods,
@@ -117,7 +118,7 @@ sub tests {
     'non-standard FOO not implemented' => {
         expected_code     => 501,
         expected_trace    => 'path_to_b12',
-        request_args      => [FOO => '/foo'],
+        request           => [FOO => '/foo'],
         override_callback => {
             allowed_methods => $http_1_0_methods,
             known_methods   => $http_1_0_methods,
@@ -126,7 +127,7 @@ sub tests {
     'URI too long' => {
         expected_code     => 414,
         expected_trace    => 'path_to_b11',
-        request_args      => [GET => '/foo'],
+        request           => GET('/foo'),
         override_callback => {
             uri_too_long => 1,
         },
@@ -134,7 +135,7 @@ sub tests {
     'HEAD method not allowed' => {
         expected_code     => 405,
         expected_trace    => 'path_to_b10',
-        request_args      => [HEAD => '/foo'],
+        request           => HEAD('/foo'),
         override_callback => {
             allowed_methods => [qw(GET POST PUT)],
         },
@@ -142,58 +143,49 @@ sub tests {
     'invalid content checksum' => {
         expected_code  => 400,
         expected_trace => 'path_to_b9c',
-        request_args   => [
-            GET => '/foo',
-            ['Content-Type' => 'text/plain'],
-        ],
+        request        => GET('/foo',
+            'Content-Type' => 'text/plain',
+            'Content-MD5'  => 'foo',
+        ),
         override_callback => {
             validate_content_checksum => 0,
-        },
-        pre_run => sub {
-            my $request = shift;
-            $request->header('Content-MD5' => 'foo');
         },
     },
     'Content-MD5 checksum invalid' => {
         expected_code  => 400,
         expected_trace => 'path_to_b9d',
-        request_args   => [
-            GET => '/foo',
-            ['Content-Type' => 'text/plain'],
-        ],
-        pre_run => sub {
-            my $request = shift;
-            my $content = 'foo';
-            $request->content($content);
-            $request->header('Content-MD5' => 'foo');
+        request        => POST('/foo',
+            'Content-Type' => 'text/plain',
+            'Content-MD5'  => 'foo',
+            'Content'      => 'foo',
+        ),
+        override_callback => {
+            allowed_methods => $http_1_0_methods,
+            known_methods   => $http_1_0_methods,
         },
+
     },
     'malformed request' => {
         expected_code     => 400,
         expected_trace    => 'path_to_b9e',
-        request_args      => [GET           => '/foo'],
+        request           => GET('/foo'),
         override_callback => {
             malformed_request => 1,
         },
     },
-    'unauthorized with Content-MD5 check' => {
+    'unauthorized with valid Content-MD5 check' => {
         expected_code  => 401,
         expected_trace => 'path_to_b8_via_b9a_b9b_b9d',
-        request_args   => [
-            GET => '/foo',
-            [
-                'Content-Type' => 'text/plain',
-                'Accept' => 'text/plain',
-            ],
-        ],
+        request        => POST('/foo',
+            'Content-Type' => 'text/plain',
+            'Content-MD5'  => md5_hex('foo'),
+            'Accept'       => 'text/plain',
+            'Content'      => 'foo',
+        ),
         override_callback => {
+            allowed_methods => $http_1_0_methods,
+            known_methods   => $http_1_0_methods,
             is_authorized => 0,
-        },
-        pre_run => sub {
-            my $request = shift;
-            my $content = 'foo';
-            $request->content($content);
-            $request->header('Content-MD5' => md5_hex($content));
         },
     },
     'unauthorized with WWW-Authenticate header' => {
@@ -205,10 +197,9 @@ sub tests {
         expected_response_headers => {
             'WWW-Authenticate' => 'Test Realm',
         },
-        request_args  => [
-            GET => '/foo',
-            ['Content-Type' => 'text/plain'],
-        ],
+        request => GET('/foo',
+            'Content-Type' => 'text/plain',
+        ),
         override_callback => {
             is_authorized => 'Test Realm',
         },
@@ -219,7 +210,7 @@ sub tests {
     'forbidden' => {
         expected_code  => 403,
         expected_trace => 'path_to_b7',
-        request_args   => [GET => '/foo'],
+        request        => GET('/foo'),
         override_callback => {
             forbidden => 1,
         },
@@ -232,23 +223,37 @@ sub tests {
                 HTTP::Headers->new('Content-Type' => 'text/plain'),
             ],
         },
-        request_args   => [
-            GET => '/foo',
-            [
-                'Content-Type' => 'text/plain',
-                'Accept' => 'text/plain',
-            ],
-        ],
+        request => GET('/foo',
+            'Content-Type' => 'text/plain',
+            'Accept'       => 'text/plain',
+        ),
         override_callback => {
             valid_content_headers => 0,
         },
     },
     'unknown content type' => {
-        expected_code     => 415,
-        expected_trace    => 'path_to_b5',
-        request_args      => [GET => '/foo'],
+        expected_code           => 415,
+        expected_trace          => 'path_to_b5',
+        excpected_callback_args => {
+            known_content_type => ['text/plain'],
+        },
+        request => GET('/foo',
+            'Content-Type' => 'text/plain',
+        ),
         override_callback => {
             known_content_type => 0,
+        },
+    },
+    'request entity too large' => {
+        expected_code           => 413,
+        expected_trace          => 'path_to_b4',
+        excpected_callback_args => {
+            valid_entity_length => [3],
+        },
+        request => POST('/foo', Content => 'foo'),
+        override_callback => {
+            allowed_methods     => [qw(POST)],
+            valid_entity_length => 0,
         },
     },
 }

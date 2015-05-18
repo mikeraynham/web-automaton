@@ -162,7 +162,7 @@ sub b6 {
 sub b5 {
     my ($self, $resource, $request, $response) = @_;
 
-    $resource->known_content_type
+    $resource->known_content_type($request->content_type)
         ? 'b4'
         : HTTP_UNSUPPORTED_MEDIA_TYPE;
 }
@@ -172,7 +172,10 @@ sub b5 {
 # B4 --> B3 : false
 sub b4 {
     my ($self, $resource, $request, $response) = @_;
-
+use Data::Dumper; print "Length: " . $request->content_length . "\n";
+    $resource->valid_entity_length($request->content_length)
+        ? 'b3'
+        : HTTP_REQUEST_ENTITY_TOO_LARGE;
 }
 
 # B3 : OPTIONS?

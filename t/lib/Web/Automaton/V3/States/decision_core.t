@@ -11,6 +11,7 @@ use Digest::MD5 qw(md5_hex);
 use HTTP::Request;
 use HTTP::Request::Common qw(GET HEAD PUT POST DELETE);
 use HTTP::Response;
+use HTTP::Config;
 use List::Util 1.33 qw(pairs);
 use Test::More;
 use Test::Deep;
@@ -36,10 +37,13 @@ for my $test (pairs @tests) {
         override_callback => $override_callback,
     );
 
+    my $metadata = HTTP::Config->new;
+
     my $states = Web::Automaton::V3::States->new(
         request  => $request,
         response => $response,
         resource => $resource,
+        metadata => $metadata,
     );
 
     $init->{pre_run}->($request) if $init->{pre_run};
@@ -90,6 +94,18 @@ for my $test (pairs @tests) {
                 superhashof($init->{excpected_callback_args}),
                 'the resource callback(s) received the expected arguments'
             );
+        }
+
+        if (exists $init->{expected_metadata}) {
+            use Data::Dumper; print Dumper(
+                $metadata->entries,
+                $init->{expected_metadata},
+            );
+            cmp_deeply(
+                $metadata->entries,
+                $init->{expected_metadata},
+                'metadata is as expected'
+            )
         }
     };
 }
@@ -254,6 +270,45 @@ sub tests {
         override_callback => {
             allowed_methods     => [qw(POST)],
             valid_entity_length => 0,
+        },
+    },
+    'request entity too large' => {
+        expected_code     => 200,
+        expected_trace    => 'path_to_b3',
+        request           => [OPTIONS => '/foo'],
+        override_callback => {
+            allowed_methods => [qw(OPTIONS)],
+        },
+    },
+    'accept exists, no acceptable media type provided' => {
+        expected_code  => 406,
+        expected_trace => 'path_to_c4',
+        request        => GET('/foo', 'Accept' => 'text/plain'),
+        override_callback => {
+            allowed_methods        => $http_1_0_methods,
+            known_methods          => $http_1_0_methods,
+            content_types_provided => ['text/html' => 'to_html'],
+        },
+    },
+
+    'accept exists, acceptable media type unavailable' => {
+        expected_code  => 406,
+        expected_trace => 'path_to_d5_via_c4',
+        expected_metadata => {
+            'Content-Type' => HTTP::Headers::ActionPack->new->create(
+                MediaType => 'text/plain',
+            ),
+        },
+        request => GET(
+            '/foo',
+            'Accept'          => 'text/plain',
+            'Accept-Language' => 'en',
+        ),
+        override_callback => {
+            allowed_methods        => $http_1_0_methods,
+            known_methods          => $http_1_0_methods,
+            content_types_provided => ['text/plain' => 'to_text'],
+            languages_provided     => ['es'],
         },
     },
 }

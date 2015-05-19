@@ -4,7 +4,7 @@ use strict;
 use warnings FATAL => qw(all);
 
 use Digest::MD5 qw(md5_hex);
-use List::Util 1.33 qw(any);
+use List::Util 1.33 qw(any pairkeys);
 use Scalar::Util qw(looks_like_number);
 use Web::Automaton::StatusCode qw(:mnemonics);
 
@@ -172,7 +172,7 @@ sub b5 {
 # B4 --> B3 : false
 sub b4 {
     my ($self, $resource, $request, $response) = @_;
-use Data::Dumper; print "Length: " . $request->content_length . "\n";
+
     $resource->valid_entity_length($request->content_length)
         ? 'b3'
         : HTTP_REQUEST_ENTITY_TOO_LARGE;
@@ -184,6 +184,11 @@ use Data::Dumper; print "Length: " . $request->content_length . "\n";
 sub b3 {
     my ($self, $resource, $request, $response) = @_;
 
+    return 'c3' unless $request->method eq 'OPTIONS';
+
+    $response->headers( $resource->options );
+
+    return HTTP_OK;
 }
 
 # C3 : Accept exists?
@@ -192,6 +197,19 @@ sub b3 {
 sub c3 {
     my ($self, $resource, $request, $response) = @_;
 
+    # If an Accept header has been provided, let C4 determine if the
+    # resource can supply to requested media type.
+    return 'c4' if $request->header('Accept');
+
+    # If an Accept header has not been provided, default to the first
+    # content type specified by content_types_provided.
+    $self->metadata->add(
+        'Content-Type' => $self->actionpack->create_media_type(
+            $resource->content_types_provided->[0]
+        ),
+    );
+
+    return 'd4';
 }
 
 # C4 : Acceptable media type available?
@@ -200,14 +218,50 @@ sub c3 {
 sub c4 {
     my ($self, $resource, $request, $response) = @_;
 
+    my @types = pairkeys @{ $resource->content_types_provided };
+
+    my $media_type = $self->actionpack->choose_media_type(
+        \@types,
+        $request->header('Accept')
+    );
+
+    if ($media_type) {
+        $self->metadata->add('Content-Type' => $media_type);
+        return 'd4';
+    }
+    
+    HTTP_NOT_ACCEPTABLE;
 }
 
 # D4 : Accept-Language exists?
 # D4 --> D5 : true
-# D4 --> 406_Not_Acceptable : false
+# D4 --> E5 : false
 sub d4 {
     my ($self, $resource, $request, $response) = @_;
 
+    $request->header('Accept-Language')
+        ? 'd5'
+        : 'e5';
+}
+
+# D5 : Acceptable language available?
+# D5 --> E5 : true
+# D5 --> 406_Not_Acceptable : false
+sub d5 {
+    my ($self, $resource, $request, $response) = @_;
+    
+    my $language = $self->actionpack->choose_language(
+        $resource->languages_provided,
+        $request->header('Accept-Language')
+    );
+
+    if ($language) {
+        $self->metadata->add('Language' => $language);
+        $self->response('Content-Language' => $language);
+        return 'e5';
+    }
+
+    HTTP_NOT_ACCEPTABLE;
 }
 
 # E5 : Accept-Charset exists?

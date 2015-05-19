@@ -203,10 +203,13 @@ sub c3 {
 
     # If an Accept header has not been provided, default to the first
     # content type specified by content_types_provided.
+    my @types = pairkeys @{$resource->content_types_provided};
+
+    die "content_types_provided() must return a list of content types\n"
+        unless @types;
+
     $self->metadata->add(
-        'Content-Type' => $self->actionpack->create_media_type(
-            $resource->content_types_provided->[0]
-        ),
+        'Content-Type' => $self->actionpack->create_media_type($types[0])
     );
 
     return 'd4';
@@ -239,6 +242,8 @@ sub c4 {
 sub d4 {
     my ($self, $resource, $request, $response) = @_;
 
+    # If no Accept-Language header is present in the request, the server
+    # SHOULD assume that all languages are equally acceptable.
     $request->header('Accept-Language')
         ? 'd5'
         : 'e5';
@@ -249,15 +254,23 @@ sub d4 {
 # D5 --> 406_Not_Acceptable : false
 sub d5 {
     my ($self, $resource, $request, $response) = @_;
-    
+
+    my @languages = @{$resource->languages_provided};
+
+    use Data::Dumper; print Dumper(\@languages);
+
+    # The resource has not specified any languages, so jump to 
+    # the next state.
+    return 'e5' if scalar @languages == 0;
+
     my $language = $self->actionpack->choose_language(
-        $resource->languages_provided,
+        \@languages,
         $request->header('Accept-Language')
     );
 
     if ($language) {
         $self->metadata->add('Language' => $language);
-        $self->response('Content-Language' => $language);
+        $self->response->header('Content-Language' => $language);
         return 'e5';
     }
 
@@ -270,6 +283,9 @@ sub d5 {
 sub e5 {
     my ($self, $resource, $request, $response) = @_;
 
+    $request->header('Accept-Charset')
+        ? 'e6'
+        : 'f6';
 }
 
 # E6 : Acceptable charset available?
@@ -278,6 +294,23 @@ sub e5 {
 sub e6 {
     my ($self, $resource, $request, $response) = @_;
 
+    my @charsets = $resource->charsets_provided;
+
+    # The resource has not specified any character sets, so jump to 
+    # the next state.
+    return 'f6' if scalar @charsets == 0;
+    
+    my $charset = $self->actionpack->choose_charset(
+        \@charsets,
+        $request->header('Accept-Charset')
+    );
+
+    if ($charset) {
+        $self->metadata->add('Charset' => $charset);
+        return 'f6';
+    }
+
+    HTTP_NOT_ACCEPTABLE;
 }
 
 1;

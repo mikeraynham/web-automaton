@@ -97,10 +97,6 @@ for my $test (pairs @tests) {
         }
 
         if (exists $init->{expected_metadata}) {
-            use Data::Dumper; print Dumper(
-                $metadata->entries,
-                $init->{expected_metadata},
-            );
             cmp_deeply(
                 $metadata->entries,
                 $init->{expected_metadata},
@@ -272,7 +268,7 @@ sub tests {
             valid_entity_length => 0,
         },
     },
-    'request entity too large' => {
+    'OPTIONS request' => {
         expected_code     => 200,
         expected_trace    => 'path_to_b3',
         request           => [OPTIONS => '/foo'],
@@ -280,18 +276,35 @@ sub tests {
             allowed_methods => [qw(OPTIONS)],
         },
     },
-    'accept exists, no acceptable media type provided' => {
+    'accept exists, media type unavailable' => {
         expected_code  => 406,
         expected_trace => 'path_to_c4',
-        request        => GET('/foo', 'Accept' => 'text/plain'),
+        request => GET(
+            '/foo',
+            # C3: true
+            'Accept' => 'text/plain',
+        ),
         override_callback => {
-            allowed_methods        => $http_1_0_methods,
-            known_methods          => $http_1_0_methods,
+            # C4: false
             content_types_provided => ['text/html' => 'to_html'],
         },
     },
-
-    'accept exists, acceptable media type unavailable' => {
+    'accept does not exist' => {
+        expected_code  => 406,
+        expected_trace => 'path_to_d5_via_c3',
+        request => GET(
+            '/foo',
+            # D4: true
+            'Accept-Language' => 'en',
+        ),
+        override_callback => {
+            # C3: default content type
+            content_types_provided => ['text/plain' => 'to_text'],
+            # D5: false
+            languages_provided => ['es'],
+        },
+    },
+    'accept-language exists, language unavailable' => {
         expected_code  => 406,
         expected_trace => 'path_to_d5_via_c4',
         expected_metadata => {
@@ -301,16 +314,41 @@ sub tests {
         },
         request => GET(
             '/foo',
-            'Accept'          => 'text/plain',
+            # C3: true 
+            'Accept' => 'text/plain',
+            # D4: true
             'Accept-Language' => 'en',
         ),
         override_callback => {
-            allowed_methods        => $http_1_0_methods,
-            known_methods          => $http_1_0_methods,
+            # C4: true
             content_types_provided => ['text/plain' => 'to_text'],
-            languages_provided     => ['es'],
+            # D5: false
+            languages_provided => ['es'],
         },
     },
+    'accept-language exists, language available' => {
+        expected_code     => 406,
+        expected_trace    => 'path_to_e6_via_d5_c3',
+        expected_metadata => {
+            'Content-Type' => HTTP::Headers::ActionPack->new->create(
+                MediaType => 'text/plain',
+            ),
+        },
+        request => GET(
+            '/foo',
+            # D4: true
+            'Accept-Language' => 'en',
+            # E5: true
+            'Accept-Charset' => 'utf8',
+        ),
+        override_callback => {
+            # C3: default content type
+            content_types_provided => ['text/plain' => 'to_text'],
+            # D5: true
+            languages_provided => ['en'],
+        },
+    },
+
 }
 
 sub merge {

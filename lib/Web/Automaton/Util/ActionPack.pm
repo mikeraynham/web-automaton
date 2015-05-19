@@ -21,6 +21,7 @@ has negotiator => (
     handles => [qw(
         choose_media_type
         choose_language
+        choose_charset
     )],
 );
 

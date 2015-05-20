@@ -15,6 +15,7 @@ use HTTP::Config;
 use List::Util 1.33 qw(pairs);
 use Test::More;
 use Test::Deep;
+use Data::Dumper;
 
 use Web::Automaton::V3::States;
 use Web::Automaton::V3::Resource;
@@ -25,8 +26,8 @@ my $paths = create_paths();
 for my $test (pairs @tests) {
     my ($desc, $init) = @$test;
 
-    my $override_callback = exists $init->{override_callback}
-        ? $init->{override_callback} : {};
+    my $callback_responses = exists $init->{callback_responses}
+        ? $init->{callback_responses} : {};
 
     my $request = ref($init->{request}) eq 'ARRAY'
         ? HTTP::Request->new(@{$init->{request}})
@@ -34,7 +35,7 @@ for my $test (pairs @tests) {
 
     my $response = HTTP::Response->new;
     my $resource = TestResource->new(
-        override_callback => $override_callback,
+        callback_responses => $callback_responses,
     );
 
     my $metadata = HTTP::Config->new;
@@ -85,7 +86,7 @@ for my $test (pairs @tests) {
         else {
             ok( !$response->header_field_names,
                 'no response headers have been added'
-            );
+            ) or diag $response->headers->as_string;
         }
 
         if (exists $init->{excpected_callback_args}) {
@@ -93,15 +94,15 @@ for my $test (pairs @tests) {
                 $resource->callback_args,
                 superhashof($init->{excpected_callback_args}),
                 'the resource callback(s) received the expected arguments'
-            );
+            ) or diag Dumper($resource->callback_args);
         }
 
         if (exists $init->{expected_metadata}) {
             cmp_deeply(
-                $metadata->entries,
+                [$metadata->entries],
                 $init->{expected_metadata},
                 'metadata is as expected'
-            )
+            ) or diag Dumper([$metadata->entries]);
         }
     };
 }
@@ -110,45 +111,45 @@ sub tests {
     my $http_1_0_methods = [qw(GET HEAD POST)];
     my $http_1_1_methods = [qw(GET HEAD POST PUT DELETE TRACE CONNECT OPTIONS)];
 
-    'service unavailable' => {
-        expected_code     => 503,
-        expected_trace    => 'path_to_b13',
-        request           => HEAD('/foo'),
-        override_callback => {
+    'service unavailable'  => {
+        expected_code      => 503,
+        expected_trace     => 'path_to_b13',
+        request            => HEAD('/foo'),
+        callback_responses => {
             service_available => 0,
         },
     },
     'DELETE not implemented' => {
-        expected_code     => 501,
-        expected_trace    => 'path_to_b12',
-        request           => DELETE('/foo'),
-        override_callback => {
+        expected_code      => 501,
+        expected_trace     => 'path_to_b12',
+        request            => DELETE('/foo'),
+        callback_responses => {
             allowed_methods => $http_1_0_methods,
             known_methods   => $http_1_0_methods,
         },
     },
     'non-standard FOO not implemented' => {
-        expected_code     => 501,
-        expected_trace    => 'path_to_b12',
-        request           => [FOO => '/foo'],
-        override_callback => {
+        expected_code      => 501,
+        expected_trace     => 'path_to_b12',
+        request            => [FOO => '/foo'],
+        callback_responses => {
             allowed_methods => $http_1_0_methods,
             known_methods   => $http_1_0_methods,
         },
     },
     'URI too long' => {
-        expected_code     => 414,
-        expected_trace    => 'path_to_b11',
-        request           => GET('/foo'),
-        override_callback => {
+        expected_code      => 414,
+        expected_trace     => 'path_to_b11',
+        request            => GET('/foo'),
+        callback_responses => {
             uri_too_long => 1,
         },
     },
     'HEAD method not allowed' => {
-        expected_code     => 405,
-        expected_trace    => 'path_to_b10',
-        request           => HEAD('/foo'),
-        override_callback => {
+        expected_code      => 405,
+        expected_trace     => 'path_to_b10',
+        request            => HEAD('/foo'),
+        callback_responses => {
             allowed_methods => [qw(GET POST PUT)],
         },
     },
@@ -159,7 +160,7 @@ sub tests {
             'Content-Type' => 'text/plain',
             'Content-MD5'  => 'foo',
         ),
-        override_callback => {
+        callback_responses => {
             validate_content_checksum => 0,
         },
     },
@@ -171,17 +172,17 @@ sub tests {
             'Content-MD5'  => 'foo',
             'Content'      => 'foo',
         ),
-        override_callback => {
+        callback_responses => {
             allowed_methods => $http_1_0_methods,
             known_methods   => $http_1_0_methods,
         },
 
     },
     'malformed request' => {
-        expected_code     => 400,
-        expected_trace    => 'path_to_b9e',
-        request           => GET('/foo'),
-        override_callback => {
+        expected_code      => 400,
+        expected_trace     => 'path_to_b9e',
+        request            => GET('/foo'),
+        callback_responses => {
             malformed_request => 1,
         },
     },
@@ -194,10 +195,10 @@ sub tests {
             'Accept'       => 'text/plain',
             'Content'      => 'foo',
         ),
-        override_callback => {
+        callback_responses => {
             allowed_methods => $http_1_0_methods,
             known_methods   => $http_1_0_methods,
-            is_authorized => 0,
+            is_authorized   => 0,
         },
     },
     'unauthorized with WWW-Authenticate header' => {
@@ -212,7 +213,7 @@ sub tests {
         request => GET('/foo',
             'Content-Type' => 'text/plain',
         ),
-        override_callback => {
+        callback_responses => {
             is_authorized => 'Test Realm',
         },
         pre_run => sub {
@@ -223,7 +224,7 @@ sub tests {
         expected_code  => 403,
         expected_trace => 'path_to_b7',
         request        => GET('/foo'),
-        override_callback => {
+        callback_responses => {
             forbidden => 1,
         },
     },
@@ -239,7 +240,7 @@ sub tests {
             'Content-Type' => 'text/plain',
             'Accept'       => 'text/plain',
         ),
-        override_callback => {
+        callback_responses => {
             valid_content_headers => 0,
         },
     },
@@ -252,7 +253,7 @@ sub tests {
         request => GET('/foo',
             'Content-Type' => 'text/plain',
         ),
-        override_callback => {
+        callback_responses => {
             known_content_type => 0,
         },
     },
@@ -263,16 +264,16 @@ sub tests {
             valid_entity_length => [3],
         },
         request => POST('/foo', Content => 'foo'),
-        override_callback => {
+        callback_responses => {
             allowed_methods     => [qw(POST)],
             valid_entity_length => 0,
         },
     },
     'OPTIONS request' => {
-        expected_code     => 200,
-        expected_trace    => 'path_to_b3',
-        request           => [OPTIONS => '/foo'],
-        override_callback => {
+        expected_code      => 200,
+        expected_trace     => 'path_to_b3',
+        request            => [OPTIONS => '/foo'],
+        callback_responses => {
             allowed_methods => [qw(OPTIONS)],
         },
     },
@@ -284,7 +285,7 @@ sub tests {
             # C3: true
             'Accept' => 'text/plain',
         ),
-        override_callback => {
+        callback_responses => {
             # C4: false
             content_types_provided => ['text/html' => 'to_html'],
         },
@@ -297,7 +298,7 @@ sub tests {
             # D4: true
             'Accept-Language' => 'en',
         ),
-        override_callback => {
+        callback_responses => {
             # C3: default content type
             content_types_provided => ['text/plain' => 'to_text'],
             # D5: false
@@ -305,13 +306,13 @@ sub tests {
         },
     },
     'accept-language exists, language unavailable' => {
-        expected_code  => 406,
-        expected_trace => 'path_to_d5_via_c4',
-        expected_metadata => {
+        expected_code     => 406,
+        expected_trace    => 'path_to_d5_via_c4',
+        expected_metadata => [{
             'Content-Type' => HTTP::Headers::ActionPack->new->create(
                 MediaType => 'text/plain',
-            ),
-        },
+            )
+        }],
         request => GET(
             '/foo',
             # C3: true 
@@ -319,7 +320,7 @@ sub tests {
             # D4: true
             'Accept-Language' => 'en',
         ),
-        override_callback => {
+        callback_responses => {
             # C4: true
             content_types_provided => ['text/plain' => 'to_text'],
             # D5: false
@@ -329,23 +330,29 @@ sub tests {
     'accept-language exists, language available' => {
         expected_code     => 406,
         expected_trace    => 'path_to_e6_via_d5_c3',
-        expected_metadata => {
+        expected_metadata => [{
             'Content-Type' => HTTP::Headers::ActionPack->new->create(
                 MediaType => 'text/plain',
-            ),
+            )
+        }, {
+            'Language' => 'en',
+        }],
+        expected_response_headers => {
+            'Content-Language' => 'en',
         },
         request => GET(
             '/foo',
             # D4: true
             'Accept-Language' => 'en',
             # E5: true
-            'Accept-Charset' => 'utf8',
+            'Accept-Charset' => 'UTF-8',
         ),
-        override_callback => {
+        callback_responses => {
             # C3: default content type
             content_types_provided => ['text/plain' => 'to_text'],
             # D5: true
             languages_provided => ['en'],
+            charsets_provided => ['US-ASCII'],
         },
     },
 

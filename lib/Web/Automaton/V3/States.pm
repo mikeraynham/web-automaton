@@ -294,7 +294,7 @@ sub e5 {
 sub e6 {
     my ($self, $resource, $request, $response) = @_;
 
-    my @charsets = $resource->charsets_provided;
+    my @charsets = @{$resource->charsets_provided};
 
     # The resource has not specified any character sets, so jump to 
     # the next state.
@@ -311,6 +311,10 @@ sub e6 {
     }
 
     HTTP_NOT_ACCEPTABLE;
+}
+
+sub f6 {
+    my ($self, $resource, $request, $response) = @_;
 }
 
 1;

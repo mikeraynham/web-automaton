@@ -257,8 +257,6 @@ sub d5 {
 
     my @languages = @{$resource->languages_provided};
 
-    use Data::Dumper; print Dumper(\@languages);
-
     # The resource has not specified any languages, so jump to 
     # the next state.
     return 'e5' if scalar @languages == 0;

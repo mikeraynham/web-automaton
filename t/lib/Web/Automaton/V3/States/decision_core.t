@@ -59,6 +59,7 @@ for my $test (pairs @tests) {
     }
 
     subtest "$code, $desc ($path)" => sub {
+        diag join ', ', @$trace;
 
         is( $code,
             $init->{expected_code},

@@ -8,7 +8,7 @@ use namespace::clean;
 
 extends 'Web::Automaton::V3::Resource';
 
-has override_callback => (is => 'ro');
+has callback_responses => (is => 'ro');
 has callback_args     => (is => 'rw', default => sub {{}});
 
 my @methods = qw(
@@ -55,8 +55,8 @@ for my $method (@methods) {
         qq|sub $method {|,
          q|    my $self = shift;|,
         qq|    \$self->callback_args->{$method} = [\@_];|,
-        qq|    exists \$self->override_callback->{$method}|,
-        qq|        ? \$self->override_callback->{$method}|,
+        qq|    exists \$self->callback_responses->{$method}|,
+        qq|        ? \$self->callback_responses->{$method}|,
         qq|        : \$self->SUPER::$method;|,
          q|}|,
     );

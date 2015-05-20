@@ -43,8 +43,6 @@ sub run {
         $prev_state = $state;
         $state = $self->$state($resource, $request, $response);
 
-        print "STATE: $state\n";
-
         last if is_status_code($state);
     }
 

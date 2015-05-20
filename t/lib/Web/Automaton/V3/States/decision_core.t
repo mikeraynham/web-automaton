@@ -280,28 +280,25 @@ sub tests {
     'accept exists, media type unavailable' => {
         expected_code  => 406,
         expected_trace => 'path_to_c4',
+        # C3 true, C4 false.
         request => GET(
             '/foo',
-            # C3: true
             'Accept' => 'text/plain',
         ),
         callback_responses => {
-            # C4: false
             content_types_provided => ['text/html' => 'to_html'],
         },
     },
     'accept does not exist' => {
         expected_code  => 406,
         expected_trace => 'path_to_d5_via_c3',
+        # C3 false, D4 true, D5 false.
         request => GET(
             '/foo',
-            # D4: true
             'Accept-Language' => 'en',
         ),
         callback_responses => {
-            # C3: default content type
             content_types_provided => ['text/plain' => 'to_text'],
-            # D5: false
             languages_provided => ['es'],
         },
     },
@@ -313,18 +310,15 @@ sub tests {
                 MediaType => 'text/plain',
             )
         }],
+        # C3 true, C4 true, D4 true, D5 false.
         request => GET(
             '/foo',
-            # C3: true 
             'Accept' => 'text/plain',
-            # D4: true
             'Accept-Language' => 'en',
         ),
         callback_responses => {
-            # C4: true
             content_types_provided => ['text/plain' => 'to_text'],
-            # D5: false
-            languages_provided => ['es'],
+            languages_provided     => ['es'],
         },
     },
     'accept-language exists, language available' => {
@@ -340,19 +334,16 @@ sub tests {
         expected_response_headers => {
             'Content-Language' => 'en',
         },
+        # C3 false, D4 true, D5 true, E5 true, E6 false.
         request => GET(
             '/foo',
-            # D4: true
             'Accept-Language' => 'en',
-            # E5: true
-            'Accept-Charset' => 'UTF-8',
+            'Accept-Charset'  => 'UTF-8',
         ),
         callback_responses => {
-            # C3: default content type
             content_types_provided => ['text/plain' => 'to_text'],
-            # D5: true
-            languages_provided => ['en'],
-            charsets_provided => ['US-ASCII'],
+            languages_provided     => ['en'],
+            charsets_provided      => ['US-ASCII'],
         },
     },
 

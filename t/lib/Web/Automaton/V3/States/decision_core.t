@@ -278,10 +278,10 @@ sub tests {
             allowed_methods => [qw(OPTIONS)],
         },
     },
-    'accept exists, media type unavailable' => {
+    # C3, C4.
+    'accept exists, media type not available' => {
         expected_code  => 406,
         expected_trace => 'path_to_c4',
-        # C3 true, C4 false.
         request => GET(
             '/foo',
             'Accept' => 'text/plain',
@@ -290,20 +290,8 @@ sub tests {
             content_types_provided => ['text/html' => 'to_html'],
         },
     },
-    'accept does not exist' => {
-        expected_code  => 406,
-        expected_trace => 'path_to_d5_via_c3',
-        # C3 false, D4 true, D5 false.
-        request => GET(
-            '/foo',
-            'Accept-Language' => 'en',
-        ),
-        callback_responses => {
-            content_types_provided => ['text/plain' => 'to_text'],
-            languages_provided => ['es'],
-        },
-    },
-    'accept-language exists, language unavailable' => {
+    # C3, C4, D4, D5.
+    'accept-language exists, language not available' => {
         expected_code     => 406,
         expected_trace    => 'path_to_d5_via_c4',
         expected_metadata => [{
@@ -311,7 +299,6 @@ sub tests {
                 MediaType => 'text/plain',
             )
         }],
-        # C3 true, C4 true, D4 true, D5 false.
         request => GET(
             '/foo',
             'Accept' => 'text/plain',
@@ -322,7 +309,8 @@ sub tests {
             languages_provided     => ['es'],
         },
     },
-    'accept-language exists, language available' => {
+    # C3, D4, D5, e5a, E6.
+    'accept-charset exists, charset not available' => {
         expected_code     => 406,
         expected_trace    => 'path_to_e6_via_d5_c3',
         expected_metadata => [{
@@ -335,7 +323,6 @@ sub tests {
         expected_response_headers => {
             'Content-Language' => 'en',
         },
-        # C3 false, D4 true, D5 true, E5 true, E6 false.
         request => GET(
             '/foo',
             'Accept-Language' => 'en',
@@ -347,7 +334,18 @@ sub tests {
             charsets_provided      => ['US-ASCII'],
         },
     },
-
+    # C3, D4, e5a, F6, F7.
+    'accept-encoding exists, encoding not available' => {
+        expected_code     => 406,
+        expected_trace    => 'path_to_f7_via_e5a_d4_c3',
+        request => GET(
+            '/foo',
+            'Accept-Encoding' => 'gzip',
+        ),
+        callback_responses => {
+            content_types_provided => ['text/plain' => 'to_text'],
+        },
+    },
 }
 
 sub merge {
@@ -497,37 +495,36 @@ sub create_paths {
         d5
     ));
 
-    # E5 - There are four paths to E5: via D5 (via C3 or via C4) or via D4
-    # (via C3 or via C4). Only some of these paths are tested.
+    # E5a
     merge($paths, qw(
-        path_to_e5_via_d5_c3
+        path_to_e5a_via_d5_c3
         path_to_d5_via_c3
-        e5
+        e5a
     ));
 
     merge($paths, qw(
-        path_to_e5_via_d5_c4
+        path_to_e5a_via_d5_c4
         path_to_d5_via_c4
-        e5
+        e5a
     ));
 
     merge($paths, qw(
-        path_to_e5_via_d4_c3
+        path_to_e5a_via_d4_c3
         path_to_d4_via_c3
-        e5
+        e5a
     ));
 
     # E6 - There are four paths to E6: via D5 (via C3 or via C4) or via D4
     # (via C3 or via C4). Only two of these paths to E6 are tested
     merge($paths, qw(
         path_to_e6_via_d5_c3
-        path_to_e5_via_d5_c3
+        path_to_e5a_via_d5_c3
         e6
     ));
 
     merge($paths, qw(
         path_to_e6_via_d5_c4
-        path_to_e5_via_d5_c4
+        path_to_e5a_via_d5_c4
         e6
     ));
 
@@ -539,12 +536,18 @@ sub create_paths {
     ));
 
     merge($paths, qw(
-        path_to_f6_via_e5_d4_c3
-        path_to_e5_via_d4_c3
+        path_to_f6_via_e5a_d4_c3
+        path_to_e5a_via_d4_c3
         f6
     ));
 
-    # F7 - A path to F7
+    # F7
+    merge($paths, qw(
+        path_to_f7_via_e5a_d4_c3
+        path_to_f6_via_e5a_d4_c3
+        f7
+    ));
+
     merge($paths, qw(
         path_to_f7_via_e6_d5_c4
         path_to_f6_via_e6_d5_c4
@@ -554,7 +557,7 @@ sub create_paths {
     # G7 - The path to G7, without accept headers in the request
     merge($paths, qw(
         path_to_g7_via_f6_e6_d5_c4
-        path_to_f6_via_e5_d4_c3
+        path_to_f6_via_e5a_d4_c3
         g7
     ));
 

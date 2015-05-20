@@ -199,7 +199,7 @@ sub c3 {
 
     # If an Accept header has been provided, let C4 determine if the
     # resource can supply to requested media type.
-    return 'c4' if $request->header('Accept');
+    return 'c4' if defined $request->header('Accept');
 
     # If an Accept header has not been provided, default to the first
     # content type specified by content_types_provided.
@@ -244,9 +244,9 @@ sub d4 {
 
     # If no Accept-Language header is present in the request, the server
     # SHOULD assume that all languages are equally acceptable.
-    $request->header('Accept-Language')
+    defined $request->header('Accept-Language')
         ? 'd5'
-        : 'e5';
+        : 'e5a';
 }
 
 # D5 : Acceptable language available?
@@ -259,7 +259,7 @@ sub d5 {
 
     # The resource has not specified any languages, so jump to 
     # the next state.
-    return 'e5' if scalar @languages == 0;
+    return 'e5a' if scalar @languages == 0;
 
     my $language = $self->actionpack->choose_language(
         \@languages,
@@ -269,7 +269,7 @@ sub d5 {
     if ($language) {
         $self->metadata->add('Language' => $language);
         $self->response->header('Content-Language' => $language);
-        return 'e5';
+        return 'e5a';
     }
 
     HTTP_NOT_ACCEPTABLE;
@@ -278,10 +278,10 @@ sub d5 {
 # E5 : Accept-Charset exists?
 # E5 --> E6 : true
 # E5 --> F6 : false
-sub e5 {
+sub e5a {
     my ($self, $resource, $request, $response) = @_;
 
-    $request->header('Accept-Charset')
+    defined $request->header('Accept-Charset')
         ? 'e6'
         : 'f6';
 }
